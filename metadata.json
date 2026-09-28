@@ -1,0 +1,7 @@
+{
+  "name": "Imperium",
+  "description": "Move with the atmosphere — a luxury aviation experience showcasing extraordinary flight routes and network scheduling.",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
