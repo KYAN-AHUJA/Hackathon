@@ -153,23 +153,23 @@ export default function App() {
         onTelemetryUpdate={setTelemetry}
       />
 
-      {/* Atmospheric Violet Stratosphere Background (In-Air Page) - ATMOS style */}
+      {/* Atmospheric Violet Stratosphere Background (In-Air Page) - ATMOS exact */}
       <div
         className="fixed inset-0 pointer-events-none z-0 transition-opacity duration-1000"
         style={{
-          background: 'linear-gradient(180deg, #0825c6 0%, #4a4bd0 40%, #8a9cf0 70%, #e8ecf5 100%)',
-          opacity: activePage === 'in-air' ? Math.max(0, 1 - scrollProgress * 1.8) : 0.02,
+          background: 'linear-gradient(180deg, #0825c6 0%, #3032b8 60%, #4f50d0 100%)',
+          opacity: activePage === 'in-air' ? Math.max(0, 1 - scrollProgress * 2.5) : 0.02,
         }}
         aria-hidden="true"
       />
 
-      {/* White Cloud Void Fade Background - ATMOS style */}
+      {/* White Cloud Void Fade Background - ATMOS exact (after 40% scroll) */}
       <div
         className="fixed inset-0 pointer-events-none z-0 bg-white"
         style={{
           opacity:
             activePage === 'in-air'
-              ? Math.min(1, Math.max(0, (scrollProgress - 0.35) * 2.0))
+              ? Math.min(1, Math.max(0, (scrollProgress - 0.4) * 2.5))
               : 0.98,
         }}
         aria-hidden="true"
@@ -181,7 +181,47 @@ export default function App() {
         isVioletZone={isVioletZone}
         viewMode={activePage}
         onToggleMode={navigateToPage}
+        scrollProgress={scrollProgress}
       />
+
+      {/* Vertical Altitude Scrubber - Right Edge Navigation */}
+      {activePage === 'in-air' && (
+        <div className="fixed right-4 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-2 pointer-events-auto">
+          <div className="w-px h-64 bg-white/20 relative">
+            {/* Active indicator tick */}
+            <div
+              className="absolute left-1/2 -translate-x-1/2 w-3 h-0.5 bg-white rounded-full transition-all duration-300"
+              style={{ top: `${scrollProgress * 100}%` }}
+            />
+          </div>
+          <div className="flex flex-col gap-3 text-[9px] font-mono text-white/60 uppercase tracking-wider -mt-2">
+            <button
+              onClick={() => scrollToSection('hero')}
+              className="hover:text-white transition-colors text-right"
+            >
+              FL450 · STRATOSPHERE
+            </button>
+            <button
+              onClick={() => scrollToSection('ascent')}
+              className="hover:text-white transition-colors text-right"
+            >
+              FL250 · TROPOSPHERE
+            </button>
+            <button
+              onClick={() => scrollToSection('cloud-dive')}
+              className="hover:text-white transition-colors text-right"
+            >
+              FL100 · APPROACH
+            </button>
+            <button
+              onClick={() => navigateToPage('in-hangar')}
+              className="hover:text-white transition-colors text-right"
+            >
+              GROUND · RUNWAY & APRON
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* PAGE 1: IN-AIR FLIGHT JOURNEY (CHASING-UP PERSPECTIVE · ATMOS.LEEROY.CA) */}
@@ -194,25 +234,31 @@ export default function App() {
             id="hero"
           >
             <div className="max-w-4xl mx-auto flex flex-col items-center">
-              <p className="font-serif text-[11px] sm:text-xs uppercase tracking-[0.4em] text-white/60 mb-5 animate-fade-in">
+              <p className="font-serif text-[11px] sm:text-xs uppercase tracking-[0.35em] text-white/60 mb-4 animate-fade-in">
                 MOVE WITH THE ATMOSPHERE
               </p>
 
-              {/* Refined Font Size Wordmark - ATMOS editorial style */}
-              <h1 className="font-serif text-white font-normal text-[clamp(48px,8vw,96px)] leading-[1.05] tracking-[0.25em] uppercase mb-10 drop-shadow-sm animate-fade-in">
+              {/* Main Title - High-fashion ultra-wide tracked serif */}
+              <h1 className="font-serif text-white font-light text-[clamp(48px,8vw,96px)] tracking-[0.25em] uppercase leading-none mb-8 animate-fade-in">
                 IMERIUM
               </h1>
 
-              {/* Navigation Action Buttons - ATMOS style */}
+              {/* Dual Action Buttons */}
               <div className="flex flex-col sm:flex-row items-center gap-4 animate-fade-in">
                 <button
                   onClick={() => navigateToPage('in-hangar')}
-                  className="inline-flex items-center gap-2.5 px-8 py-3.5 rounded-full bg-white text-black font-sans text-sm sm:text-base font-bold leading-tight hover:scale-105 active:scale-95 transition-all duration-300 shadow-2xl"
+                  className="px-8 py-3.5 rounded-full bg-white text-black font-sans font-bold text-sm tracking-wider uppercase hover:scale-105 active:scale-95 transition-all shadow-2xl"
                 >
-                  <Warehouse size={16} />
-                  <span>Enter 3D Apron Operations</span>
-                  <ArrowUpRight size={16} />
+                  Enter 3D Apron Operations
                 </button>
+
+                <button
+                  onClick={() => scrollToSection('ascent')}
+                  className="px-8 py-3.5 rounded-full border border-white/30 text-white font-sans font-medium text-sm tracking-wider uppercase hover:bg-white/10 transition-all backdrop-blur-sm"
+                >
+                  Flight Experience
+                </button>
+              </div>
 
                 <button
                   onClick={() => scrollToSection('ascent')}
@@ -230,16 +276,16 @@ export default function App() {
               </div>
             </div>
 
-            {/* Scroll Indicator */}
+            {/* Bottom Scroll Indicator */}
             <div
               onClick={() => scrollToSection('ascent')}
               className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 cursor-pointer text-white/50 hover:text-white transition-colors duration-300"
             >
               <span className="font-serif text-[10px] uppercase tracking-[0.25em]">
-                Scroll to navigate flight
+                SCROLL TO NAVIGATE FLIGHT
               </span>
-              <div className="w-[1.5px] h-8 bg-white/20 relative overflow-hidden rounded-full">
-                <div className="w-full h-1/2 bg-white/90 animate-scroll-pill rounded-full" />
+              <div className="w-8 h-12 border border-white/30 rounded-full relative overflow-hidden backdrop-blur-sm">
+                <div className="w-1.5 h-1.5 bg-white rounded-full absolute left-1/2 -translate-x-1/2 animate-scroll-pill" />
               </div>
             </div>
           </section>

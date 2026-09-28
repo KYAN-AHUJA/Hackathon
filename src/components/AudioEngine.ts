@@ -1,4 +1,4 @@
-// Web Audio API Procedural Ambient Sound Generator for high-altitude flight
+// Web Audio API Procedural Ambient Sound Generator for high-altitude flight - ATMOS exact
 class FlightAudioEngine {
   private ctx: AudioContext | null = null;
   private noiseNode: AudioNode | null = null;
@@ -6,6 +6,8 @@ class FlightAudioEngine {
   private filterNode: BiquadFilterNode | null = null;
   private rumbleOsc: OscillatorNode | null = null;
   private rumbleGain: GainNode | null = null;
+  private clickOsc: OscillatorNode | null = null;
+  private clickGain: GainNode | null = null;
   public isPlaying: boolean = false;
 
   public init() {
@@ -41,10 +43,10 @@ class FlightAudioEngine {
     this.filterNode.frequency.setValueAtTime(380, this.ctx.currentTime);
     this.filterNode.Q.setValueAtTime(1.5, this.ctx.currentTime);
 
-    // Deep sub-bass jet turbine rumble
+    // Deep sub-bass jet turbine rumble (55 Hz for cabin hum)
     this.rumbleOsc = this.ctx.createOscillator();
     this.rumbleOsc.type = 'sine';
-    this.rumbleOsc.frequency.setValueAtTime(68, this.ctx.currentTime);
+    this.rumbleOsc.frequency.setValueAtTime(55, this.ctx.currentTime);
 
     this.rumbleGain = this.ctx.createGain();
     this.rumbleGain.gain.setValueAtTime(0.04, this.ctx.currentTime);
@@ -87,16 +89,48 @@ class FlightAudioEngine {
 
   public updateSpeed(speedFactor: number) {
     if (!this.ctx || !this.filterNode || !this.rumbleOsc || !this.isPlaying) return;
-    // Modulate pitch and filter frequency more dramatically with scroll speed - ATMOS style
-    const targetFreq = 350 + speedFactor * 420;
+    // Dynamic modulation with scroll velocity - ATMOS exact
+    const targetFreq = 380 + speedFactor * 420;
     this.filterNode.frequency.setTargetAtTime(targetFreq, this.ctx.currentTime, 0.08);
-    this.rumbleOsc.frequency.setTargetAtTime(65 + speedFactor * 35, this.ctx.currentTime, 0.08);
+    this.rumbleOsc.frequency.setTargetAtTime(55 + speedFactor * 35, this.ctx.currentTime, 0.08);
 
     // Modulate gain based on speed for dynamic wind intensity
     if (this.gainNode) {
       const targetGain = 0.12 + speedFactor * 0.15;
       this.gainNode.gain.setTargetAtTime(targetGain, this.ctx.currentTime, 0.15);
     }
+  }
+
+  public playClick() {
+    if (!this.ctx) return;
+    // Subtle UI click chime
+    const clickOsc = this.ctx.createOscillator();
+    const clickGain = this.ctx.createGain();
+    clickOsc.type = 'sine';
+    clickOsc.frequency.setValueAtTime(1200, this.ctx.currentTime);
+    clickOsc.frequency.exponentialRampToValueAtTime(800, this.ctx.currentTime + 0.05);
+    clickGain.gain.setValueAtTime(0.03, this.ctx.currentTime);
+    clickGain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.05);
+    clickOsc.connect(clickGain);
+    clickGain.connect(this.ctx.destination);
+    clickOsc.start();
+    clickOsc.stop(this.ctx.currentTime + 0.05);
+  }
+
+  public playTelemetryConfirm() {
+    if (!this.ctx) return;
+    // Telemetry confirmation chime
+    const confirmOsc = this.ctx.createOscillator();
+    const confirmGain = this.ctx.createGain();
+    confirmOsc.type = 'sine';
+    confirmOsc.frequency.setValueAtTime(880, this.ctx.currentTime);
+    confirmOsc.frequency.setValueAtTime(1100, this.ctx.currentTime + 0.05);
+    confirmGain.gain.setValueAtTime(0.02, this.ctx.currentTime);
+    confirmGain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.1);
+    confirmOsc.connect(confirmGain);
+    confirmGain.connect(this.ctx.destination);
+    confirmOsc.start();
+    confirmOsc.stop(this.ctx.currentTime + 0.1);
   }
 
   private fadeTo(target: number, duration: number) {

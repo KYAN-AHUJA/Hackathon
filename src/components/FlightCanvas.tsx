@@ -83,8 +83,9 @@ export function FlightCanvas({
     const skySphereMat = new THREE.ShaderMaterial({
       uniforms: {
         topColor: { value: new THREE.Color(0x0825c6) },
-        middleColor: { value: new THREE.Color(0x4a4bd0) },
-        bottomColor: { value: new THREE.Color(0xffffff) },
+        middleColor: { value: new THREE.Color(0x3032b8) },
+        bottomColor: { value: new THREE.Color(0x4f50d0) },
+        whiteColor: { value: new THREE.Color(0xffffff) },
         scrollProgress: { value: 0 },
         exponent: { value: 0.6 }
       },
@@ -102,6 +103,7 @@ export function FlightCanvas({
         uniform vec3 topColor;
         uniform vec3 middleColor;
         uniform vec3 bottomColor;
+        uniform vec3 whiteColor;
         uniform float scrollProgress;
         uniform float exponent;
         varying vec3 vWorldPosition;
@@ -110,11 +112,15 @@ export function FlightCanvas({
           float h = max(vHeight, 0.0);
           float t = pow(h, exponent);
 
-          // Transition from violet to white based on scroll progress
-          vec3 skyTop = mix(topColor, middleColor, scrollProgress * 0.5);
-          vec3 skyBottom = mix(middleColor, bottomColor, scrollProgress);
+          // Transition from violet to white after 40% scroll
+          float whiteTransition = smoothstep(0.4, 0.8, scrollProgress);
 
-          vec3 skyColor = mix(skyBottom, skyTop, t);
+          vec3 skyTop = mix(topColor, middleColor, scrollProgress * 0.3);
+          vec3 skyBottom = mix(middleColor, bottomColor, scrollProgress * 0.2);
+          vec3 finalTop = mix(skyTop, whiteColor, whiteTransition);
+          vec3 finalBottom = mix(skyBottom, whiteColor, whiteTransition);
+
+          vec3 skyColor = mix(finalBottom, finalTop, t);
           gl_FragColor = vec4(skyColor, 1.0);
         }
       `,
@@ -600,86 +606,74 @@ export function FlightCanvas({
           baseOffsetZ = -6.8;
         }
 
-        if (p < 0.20) {
-          // Phase 0: FL450 Stratospheric Hero View - ATMOS style
-          const lp = p / 0.20;
+        if (p < 0.25) {
+          // Phase 0: Hero Stratosphere (0% - 25%) - 3/4 front-hero angle looking up
+          const lp = p / 0.25;
           targetPlaneX = 0;
-          targetPlaneY = 0.15 + lp * 0.3 + turbY;
-          targetPlaneZ = -lp * 3.0;
+          targetPlaneY = 0.2 + lp * 0.4 + turbY;
+          targetPlaneZ = -lp * 2.5;
 
           // Level cruise with subtle movements
-          targetRotX = -0.08 + turbPitch;
+          targetRotX = -0.06 + turbPitch;
           targetRotY = 0;
           targetRotZ = turbRoll;
 
-          // Hero camera front view
-          targetCamX = targetPlaneX + baseOffsetX;
-          targetCamY = targetPlaneY + baseOffsetY;
-          targetCamZ = targetPlaneZ + baseOffsetZ;
-          targetLookAt.set(targetPlaneX, targetPlaneY + 0.1, targetPlaneZ);
-        } else if (p < 0.40) {
-          // Phase 1: Descent Phase - smooth swoop through cloud layers
-          const lp = (p - 0.20) / (0.40 - 0.20);
+          // Hero camera front view looking up
+          targetCamX = targetPlaneX + 1.5;
+          targetCamY = targetPlaneY + 0.5;
+          targetCamZ = targetPlaneZ - 6.0;
+          targetLookAt.set(targetPlaneX, targetPlaneY + 0.2, targetPlaneZ);
+        } else if (p < 0.50) {
+          // Phase 1: Stratospheric Cruise (25% - 50%) - Camera tracks alongside starboard wing
+          const lp = (p - 0.25) / (0.50 - 0.25);
           const arc = Math.sin(lp * Math.PI);
-          targetPlaneX = -1.8 * arc;
-          targetPlaneY = 0.45 + lp * 0.8 + turbY;
-          targetPlaneZ = -3.0 - lp * 6.0;
+          targetPlaneX = -2.0 * arc;
+          targetPlaneY = 0.6 + lp * 0.6 + turbY;
+          targetPlaneZ = -2.5 - lp * 5.0;
 
-          // Gentle bank during descent
-          targetRotX = -0.06 + 0.04 * arc;
-          targetRotY = -0.18 * arc;
-          targetRotZ = -0.32 * arc + turbRoll;
+          // Gentle bank alongside wing
+          targetRotX = -0.05 + 0.03 * arc;
+          targetRotY = -0.15 * arc;
+          targetRotZ = -0.28 * arc + turbRoll;
 
-          targetCamX = targetPlaneX + baseOffsetX - 0.5 * arc;
-          targetCamY = targetPlaneY + baseOffsetY;
-          targetCamZ = targetPlaneZ + baseOffsetZ;
-          targetLookAt.set(targetPlaneX, targetPlaneY + 0.1, targetPlaneZ);
-        } else if (p < 0.65) {
-          // Phase 2: Cloud layer penetration
-          const lp = (p - 0.40) / (0.65 - 0.40);
-          const arc = Math.sin(lp * Math.PI);
-          targetPlaneX = 1.5 * arc;
-          targetPlaneY = 1.25 - lp * 0.4 + turbY;
-          targetPlaneZ = -9.0 - lp * 8.0;
+          // Camera alongside starboard wing
+          targetCamX = targetPlaneX + 3.5;
+          targetCamY = targetPlaneY + 0.8;
+          targetCamZ = targetPlaneZ - 4.0;
+          targetLookAt.set(targetPlaneX + 1.5, targetPlaneY + 0.1, targetPlaneZ);
+        } else if (p < 0.75) {
+          // Phase 2: Troposphere Cloud Penetration (50% - 75%) - Top-down chase angle
+          const lp = (p - 0.50) / (0.75 - 0.50);
+          targetPlaneX = Math.sin(lp * Math.PI) * 0.5;
+          targetPlaneY = 1.2 - lp * 0.8 + turbY;
+          targetPlaneZ = -7.5 - lp * 6.0;
 
-          // Right bank through clouds
-          targetRotX = -0.10;
-          targetRotY = 0.20 * arc;
-          targetRotZ = 0.30 * arc + turbRoll;
+          // Dramatic top-down approach
+          targetRotX = 0.15 * lp;
+          targetRotY = 0.1 * Math.sin(lp * Math.PI);
+          targetRotZ = -0.05 * Math.sin(lp * Math.PI) + turbRoll;
 
-          targetCamX = targetPlaneX + baseOffsetX + 0.6 * arc;
-          targetCamY = targetPlaneY + baseOffsetY;
-          targetCamZ = targetPlaneZ + baseOffsetZ;
-          targetLookAt.set(targetPlaneX, targetPlaneY + 0.1, targetPlaneZ);
-        } else if (p < 0.85) {
-          // Phase 3: Approach Phase - fade to runway view
-          const lp = (p - 0.65) / (0.85 - 0.65);
-          targetPlaneX = Math.sin(lp * Math.PI * 2) * 0.2;
-          targetPlaneY = 0.85 - lp * 2.0 + turbY;
-          targetPlaneZ = -17.0 - lp * 12.0;
-
-          targetRotX = 0.12 * Math.sin(lp * Math.PI * 0.8);
-          targetRotY = 0.05 * Math.sin(lp * Math.PI);
-          targetRotZ = -0.08 * Math.sin(lp * Math.PI * 1.3) + turbRoll;
-
-          targetCamX = targetPlaneX + baseOffsetX;
-          targetCamY = targetPlaneY + baseOffsetY + 0.12;
-          targetCamZ = targetPlaneZ + baseOffsetZ;
-          targetLookAt.set(targetPlaneX, targetPlaneY + 0.1, targetPlaneZ);
+          // Top-down chase camera
+          targetCamX = targetPlaneX + 0.5;
+          targetCamY = targetPlaneY + 4.0;
+          targetCamZ = targetPlaneZ - 3.0;
+          targetLookAt.set(targetPlaneX, targetPlaneY, targetPlaneZ);
         } else {
-          // Phase 4: Final approach to tarmac
-          const lp = (p - 0.85) / 0.15;
-          targetPlaneX = 0;
-          targetPlaneY = -1.15 + lp * 0.2 + turbY;
-          targetPlaneZ = -29.0 - lp * 6.0;
+          // Phase 3: Descent & Runway Approach (75% - 100%) - Bank and align with ground
+          const lp = (p - 0.75) / 0.25;
+          targetPlaneX = Math.sin(lp * Math.PI * 0.5) * 0.3;
+          targetPlaneY = 0.4 - lp * 1.5 + turbY;
+          targetPlaneZ = -13.5 - lp * 8.0;
 
-          targetRotX = -0.03;
-          targetRotY = 0;
-          targetRotZ = turbRoll * 0.4;
+          // Bank and align with ground approach
+          targetRotX = 0.1 * (1 - lp);
+          targetRotY = 0.05 * (1 - lp);
+          targetRotZ = -0.02 * (1 - lp) + turbRoll;
 
-          targetCamX = targetPlaneX + baseOffsetX;
-          targetCamY = targetPlaneY + baseOffsetY;
-          targetCamZ = targetPlaneZ + baseOffsetZ;
+          // Ground approach alignment
+          targetCamX = targetPlaneX + 2.0;
+          targetCamY = targetPlaneY + 1.5;
+          targetCamZ = targetPlaneZ - 5.0;
           targetLookAt.set(targetPlaneX, targetPlaneY + 0.1, targetPlaneZ);
         }
 
