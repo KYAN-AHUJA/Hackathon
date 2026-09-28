@@ -155,7 +155,7 @@ export default function App() {
 
       {/* Atmospheric Violet Stratosphere Background (In-Air Page) - ATMOS exact */}
       <div
-        className="fixed inset-0 pointer-events-none z-0 transition-opacity duration-1000"
+        className="fixed inset-0 pointer-events-none z-0 transition-opacity duration-1000 atmos-grain"
         style={{
           background: 'linear-gradient(180deg, #0825c6 0%, #3032b8 60%, #4f50d0 100%)',
           opacity: activePage === 'in-air' ? Math.max(0, 1 - scrollProgress * 2.5) : 0.02,
@@ -175,6 +175,28 @@ export default function App() {
         aria-hidden="true"
       />
 
+      {/* ATMOS Viewport 4-Corner Crosshair Reticles */}
+      {activePage === 'in-air' && (
+        <div className="fixed inset-0 pointer-events-none z-30 font-mono text-[9px] text-white/40 uppercase tracking-widest select-none">
+          <div className="absolute top-20 left-8 flex items-center gap-1.5 animate-reticle">
+            <span className="text-white/60">+</span>
+            <span>45°30'12"N</span>
+          </div>
+          <div className="absolute top-20 right-8 flex items-center gap-1.5 animate-reticle">
+            <span className="text-white/60">+</span>
+            <span>73°34'50"W</span>
+          </div>
+          <div className="absolute bottom-8 left-8 flex items-center gap-1.5 animate-reticle">
+            <span className="text-white/60">+</span>
+            <span>ELEVATION: FL450</span>
+          </div>
+          <div className="absolute bottom-8 right-8 flex items-center gap-1.5 animate-reticle">
+            <span className="text-white/60">+</span>
+            <span>SPEED: MACH 0.85</span>
+          </div>
+        </div>
+      )}
+
       {/* Global Top HUD Header & Telemetry */}
       <FlightTelemetry
         data={telemetry}
@@ -186,39 +208,42 @@ export default function App() {
 
       {/* Vertical Altitude Scrubber - Right Edge Navigation */}
       {activePage === 'in-air' && (
-        <div className="fixed right-4 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-2 pointer-events-auto">
-          <div className="w-px h-64 bg-white/20 relative">
-            {/* Active indicator tick */}
-            <div
-              className="absolute left-1/2 -translate-x-1/2 w-3 h-0.5 bg-white rounded-full transition-all duration-300"
-              style={{ top: `${scrollProgress * 100}%` }}
-            />
-          </div>
-          <div className="flex flex-col gap-3 text-[9px] font-mono text-white/60 uppercase tracking-wider -mt-2">
-            <button
-              onClick={() => scrollToSection('hero')}
-              className="hover:text-white transition-colors text-right"
-            >
-              FL450 · STRATOSPHERE
-            </button>
-            <button
-              onClick={() => scrollToSection('ascent')}
-              className="hover:text-white transition-colors text-right"
-            >
-              FL250 · TROPOSPHERE
-            </button>
-            <button
-              onClick={() => scrollToSection('cloud-dive')}
-              className="hover:text-white transition-colors text-right"
-            >
-              FL100 · APPROACH
-            </button>
-            <button
-              onClick={() => navigateToPage('in-hangar')}
-              className="hover:text-white transition-colors text-right"
-            >
-              GROUND · RUNWAY & APRON
-            </button>
+        <div className="fixed right-6 top-1/2 -translate-y-1/2 z-40 flex flex-col items-end gap-3 pointer-events-auto select-none">
+          <div className="flex items-center gap-4">
+            <div className="flex flex-col gap-5 text-[9px] font-mono text-white/50 uppercase tracking-wider text-right">
+              <button
+                onClick={() => scrollToSection('hero')}
+                className={`transition-colors hover:text-white ${scrollProgress < 0.25 ? 'text-white font-bold' : ''}`}
+              >
+                FL450 · STRATOSPHERE
+              </button>
+              <button
+                onClick={() => scrollToSection('ascent')}
+                className={`transition-colors hover:text-white ${scrollProgress >= 0.25 && scrollProgress < 0.5 ? 'text-white font-bold' : ''}`}
+              >
+                FL250 · TROPOSPHERE
+              </button>
+              <button
+                onClick={() => scrollToSection('cloud-dive')}
+                className={`transition-colors hover:text-white ${scrollProgress >= 0.5 && scrollProgress < 0.75 ? 'text-white font-bold' : ''}`}
+              >
+                FL100 · APPROACH
+              </button>
+              <button
+                onClick={() => navigateToPage('in-hangar')}
+                className={`transition-colors hover:text-white ${scrollProgress >= 0.75 ? 'text-white font-bold' : ''}`}
+              >
+                GND · APRON DOCK
+              </button>
+            </div>
+
+            <div className="w-[1.5px] h-48 bg-white/20 relative rounded-full">
+              {/* Active glowing indicator tick */}
+              <div
+                className="absolute left-1/2 -translate-x-1/2 w-3.5 h-1 bg-white rounded-full transition-all duration-150 shadow-[0_0_10px_rgba(255,255,255,0.8)]"
+                style={{ top: `${Math.min(100, Math.max(0, scrollProgress * 100))}%` }}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -234,42 +259,36 @@ export default function App() {
             id="hero"
           >
             <div className="max-w-4xl mx-auto flex flex-col items-center">
-              <p className="font-serif text-[11px] sm:text-xs uppercase tracking-[0.35em] text-white/60 mb-4 animate-fade-in">
+              <p className="font-serif text-[11px] sm:text-xs uppercase tracking-[0.4em] text-white/70 mb-4 animate-fade-in">
                 MOVE WITH THE ATMOSPHERE
               </p>
 
               {/* Main Title - High-fashion ultra-wide tracked serif */}
-              <h1 className="font-serif text-white font-light text-[clamp(48px,8vw,96px)] tracking-[0.25em] uppercase leading-none mb-8 animate-fade-in">
+              <h1 className="font-serif text-white font-light text-[clamp(54px,9vw,110px)] tracking-[0.25em] uppercase leading-none mb-10 drop-shadow-lg animate-fade-in">
                 IMERIUM
               </h1>
 
-              {/* Dual Action Buttons */}
+              {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row items-center gap-4 animate-fade-in">
                 <button
                   onClick={() => navigateToPage('in-hangar')}
-                  className="px-8 py-3.5 rounded-full bg-white text-black font-sans font-bold text-sm tracking-wider uppercase hover:scale-105 active:scale-95 transition-all shadow-2xl"
+                  className="inline-flex items-center gap-2.5 px-8 py-4 rounded-full bg-white text-black font-sans font-bold text-xs uppercase tracking-wider hover:scale-105 active:scale-95 transition-all shadow-[0_10px_30px_rgba(0,0,0,0.3)]"
                 >
-                  Enter 3D Apron Operations
+                  <Warehouse size={15} />
+                  <span>Enter 3D Apron Operations</span>
+                  <ArrowUpRight size={15} />
                 </button>
 
                 <button
                   onClick={() => scrollToSection('ascent')}
-                  className="px-8 py-3.5 rounded-full border border-white/30 text-white font-sans font-medium text-sm tracking-wider uppercase hover:bg-white/10 transition-all backdrop-blur-sm"
-                >
-                  Flight Experience
-                </button>
-              </div>
-
-                <button
-                  onClick={() => scrollToSection('ascent')}
-                  className="px-7 py-3.5 rounded-full border border-white/30 text-white font-sans text-sm sm:text-base font-medium tracking-wide hover:bg-white/10 active:scale-95 transition-all duration-300 backdrop-blur-sm"
+                  className="px-8 py-4 rounded-full border border-white/30 text-white font-sans font-medium text-xs uppercase tracking-wider hover:bg-white/10 active:scale-95 transition-all backdrop-blur-sm"
                 >
                   Flight Experience
                 </button>
 
                 <button
                   onClick={() => scrollToSection('routes')}
-                  className="px-7 py-3.5 rounded-full border border-white/30 text-white font-sans text-sm sm:text-base font-medium tracking-wide hover:bg-white/10 active:scale-95 transition-all duration-300 backdrop-blur-sm"
+                  className="px-7 py-4 rounded-full border border-white/20 text-white/80 font-sans font-medium text-xs uppercase tracking-wider hover:bg-white/10 hover:text-white active:scale-95 transition-all backdrop-blur-sm"
                 >
                   Network Routes
                 </button>
@@ -279,16 +298,17 @@ export default function App() {
             {/* Bottom Scroll Indicator */}
             <div
               onClick={() => scrollToSection('ascent')}
-              className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 cursor-pointer text-white/50 hover:text-white transition-colors duration-300"
+              className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 cursor-pointer text-white/50 hover:text-white transition-colors duration-300 select-none"
             >
-              <span className="font-serif text-[10px] uppercase tracking-[0.25em]">
+              <span className="font-serif text-[10px] uppercase tracking-[0.3em]">
                 SCROLL TO NAVIGATE FLIGHT
               </span>
-              <div className="w-8 h-12 border border-white/30 rounded-full relative overflow-hidden backdrop-blur-sm">
-                <div className="w-1.5 h-1.5 bg-white rounded-full absolute left-1/2 -translate-x-1/2 animate-scroll-pill" />
+              <div className="w-7 h-12 border border-white/30 rounded-full relative overflow-hidden backdrop-blur-sm flex justify-center">
+                <div className="w-1.5 h-1.5 bg-white rounded-full mt-2 animate-scroll-pill shadow-[0_0_8px_white]" />
               </div>
             </div>
           </section>
+
 
           {/* SECTION 1: STRATOSPHERIC ASCENT (FL450) - ATMOS NARRATIVE CHAPTER */}
           <section
