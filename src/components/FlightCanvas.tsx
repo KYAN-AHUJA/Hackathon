@@ -76,15 +76,15 @@ export function FlightCanvas({
 
     // --- THREE.JS SCENE SETUP ---
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x0825c6, 0.0075);
+    scene.fog = new THREE.FogExp2(0x1e45ee, 0.0055);
 
-    // ATMOS-style sky sphere for gradient background
+    // ATMOS-style sky sphere for gradient background (lighter luminous atmosphere)
     const skySphereGeom = new THREE.SphereGeometry(800, 32, 32);
     const skySphereMat = new THREE.ShaderMaterial({
       uniforms: {
-        topColor: { value: new THREE.Color(0x0825c6) },
-        middleColor: { value: new THREE.Color(0x3032b8) },
-        bottomColor: { value: new THREE.Color(0x4f50d0) },
+        topColor: { value: new THREE.Color(0x1b3fed) },
+        middleColor: { value: new THREE.Color(0x3e62f5) },
+        bottomColor: { value: new THREE.Color(0x6e8bf8) },
         whiteColor: { value: new THREE.Color(0xffffff) },
         scrollProgress: { value: 0 },
         exponent: { value: 0.6 }
@@ -443,9 +443,9 @@ export function FlightCanvas({
     cloudCanvas.height = 128;
     const cloudCtx = cloudCanvas.getContext('2d')!;
     const cloudGrad = cloudCtx.createRadialGradient(64, 64, 2, 64, 64, 64);
-    cloudGrad.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
-    cloudGrad.addColorStop(0.3, 'rgba(245, 248, 255, 0.5)');
-    cloudGrad.addColorStop(0.7, 'rgba(235, 240, 255, 0.18)');
+    cloudGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+    cloudGrad.addColorStop(0.35, 'rgba(248, 250, 255, 0.65)');
+    cloudGrad.addColorStop(0.7, 'rgba(235, 242, 255, 0.25)');
     cloudGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
     cloudCtx.fillStyle = cloudGrad;
     cloudCtx.fillRect(0, 0, 128, 128);
@@ -454,7 +454,7 @@ export function FlightCanvas({
     const cloudPuffMat = new THREE.SpriteMaterial({
       map: cloudTex,
       transparent: true,
-      opacity: 0.45,
+      opacity: 0.68,
       blending: THREE.NormalBlending,
       depthWrite: false,
     });
@@ -462,15 +462,20 @@ export function FlightCanvas({
     const cloudsGroup = new THREE.Group();
     scene.add(cloudsGroup);
 
-    const cloudCount = 70;
+    // Dense volumetric carpet of clouds situated directly beneath the airplane
+    const cloudCount = 130;
     const cloudNodes: { sprite: THREE.Sprite; initialX: number; speed: number; rotSpeed: number }[] = [];
 
     for (let i = 0; i < cloudCount; i++) {
       const sprite = new THREE.Sprite(cloudPuffMat.clone());
-      const x = (Math.random() - 0.5) * 60;
-      const y = -4.5 + (Math.random() - 0.5) * 8;
-      const z = 25 - Math.random() * 95;
-      const scale = 10 + Math.random() * 15;
+      // Spanning horizon across X
+      const x = (Math.random() - 0.5) * 80;
+      // Positioned strictly beneath the aircraft (airplane altitude is at y ~ 0.2 to 1.2)
+      const y = -1.8 - Math.random() * 4.2;
+      // Spanning deep along Z
+      const z = 30 - Math.random() * 110;
+      // Fluffy large scales for continuous cumulus sea
+      const scale = 14 + Math.random() * 22;
 
       sprite.position.set(x, y, z);
       sprite.scale.set(scale, scale, 1);
@@ -479,8 +484,8 @@ export function FlightCanvas({
       cloudNodes.push({
         sprite,
         initialX: x,
-        speed: 0.03 + Math.random() * 0.05,
-        rotSpeed: (Math.random() - 0.5) * 0.001,
+        speed: 0.04 + Math.random() * 0.06,
+        rotSpeed: (Math.random() - 0.5) * 0.0012,
       });
     }
 
@@ -711,12 +716,12 @@ export function FlightCanvas({
         }
         windGeom.attributes.position.needsUpdate = true;
 
-        // Fog color: Deep violet fading to brilliant cloud white
-        const fogViolet = new THREE.Color(0x0825c6);
+        // Fog color: Luminous violet fading to brilliant cloud white
+        const fogViolet = new THREE.Color(0x1e45ee);
         const fogWhite = new THREE.Color(0xffffff);
         const fogT = Math.min(Math.max((p - 0.32) * 1.8, 0), 1);
         (scene.fog as THREE.FogExp2).color.lerpColors(fogViolet, fogWhite, fogT);
-        (scene.fog as THREE.FogExp2).density = 0.0075 + fogT * 0.01;
+        (scene.fog as THREE.FogExp2).density = 0.0055 + fogT * 0.01;
       } else {
         // ===================================================================
         // IN-HANGAR / ON-AIRSTRIP MODE: 3D AIRPORT APRON SIMULATION

@@ -28,36 +28,18 @@ export function build11803Airliner(): AirlinerModelResult {
   const wingTextureR = createAirlinerWingTexture(false);
   const turbofanTexture = createAirlinerTurbofanTexture();
 
-  // Materials
-  const fuselageMat = new THREE.MeshStandardMaterial({
-    map: bodyTexture,
-    metalness: 0.12,
-    roughness: 0.22,
+  // High-Definition Completely Pure White PBR Materials
+  const pureWhiteAirlinerMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    metalness: 0.08,
+    roughness: 0.18,
   });
 
-  const tailMat = new THREE.MeshStandardMaterial({
-    map: tailTexture,
-    metalness: 0.1,
-    roughness: 0.25,
-  });
-
-  const wingMatL = new THREE.MeshStandardMaterial({
-    map: wingTextureL,
-    metalness: 0.15,
-    roughness: 0.35,
-  });
-
-  const wingMatR = new THREE.MeshStandardMaterial({
-    map: wingTextureR,
-    metalness: 0.15,
-    roughness: 0.35,
-  });
-
-  const engineMat = new THREE.MeshStandardMaterial({
-    map: turbofanTexture,
-    metalness: 0.15,
-    roughness: 0.28,
-  });
+  const fuselageMat = pureWhiteAirlinerMat;
+  const tailMat = pureWhiteAirlinerMat;
+  const wingMatL = pureWhiteAirlinerMat;
+  const wingMatR = pureWhiteAirlinerMat;
+  const engineMat = pureWhiteAirlinerMat;
 
   const chromeMat = new THREE.MeshStandardMaterial({
     color: 0xe6e9ef,

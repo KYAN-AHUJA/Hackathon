@@ -153,11 +153,11 @@ export default function App() {
         onTelemetryUpdate={setTelemetry}
       />
 
-      {/* Atmospheric Violet Stratosphere Background (In-Air Page) - ATMOS exact */}
+      {/* Atmospheric Violet Stratosphere Background (In-Air Page) - ATMOS exact (luminous lighter violet) */}
       <div
         className="fixed inset-0 pointer-events-none z-0 transition-opacity duration-1000 atmos-grain"
         style={{
-          background: 'linear-gradient(180deg, #0825c6 0%, #3032b8 60%, #4f50d0 100%)',
+          background: 'linear-gradient(180deg, #1b3fed 0%, #3a5df5 45%, #607ef8 78%, #859efa 100%)',
           opacity: activePage === 'in-air' ? Math.max(0, 1 - scrollProgress * 2.5) : 0.02,
         }}
         aria-hidden="true"
@@ -265,7 +265,7 @@ export default function App() {
 
               {/* Main Title - High-fashion ultra-wide tracked serif */}
               <h1 className="font-serif text-white font-light text-[clamp(54px,9vw,110px)] tracking-[0.25em] uppercase leading-none mb-10 drop-shadow-lg animate-fade-in">
-                IMERIUM
+                IMPERIUM
               </h1>
 
               {/* Action Buttons */}

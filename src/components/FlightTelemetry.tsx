@@ -62,13 +62,13 @@ export function FlightTelemetry({
           </div>
         </div>
 
-        {/* Center Section: Editorial ATMOS Branding */}
+        {/* Center Section: Editorial IMPERIUM Branding */}
         <div className="flex items-center gap-3 pointer-events-auto">
           <span className="font-serif text-xs sm:text-sm tracking-[0.3em] uppercase text-white font-light">
-            ATMOS
+            IMPERIUM
           </span>
-          <span className="text-white/30 text-[9px] tracking-widest hidden sm:inline">
-            // FLIGHT DISPATCH
+          <span className="text-white/40 text-[9px] tracking-widest hidden sm:inline">
+            // ATMOS FLIGHT DISPATCH
           </span>
         </div>
 
