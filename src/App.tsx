@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import Lenis from 'lenis';
-import { Plane, Warehouse, ArrowUpRight, ArrowLeft } from 'lucide-react';
+import { Plane, Warehouse, ArrowUpRight, ArrowLeft, X, Layers, Compass, Wind } from 'lucide-react';
 import {
   FlightCanvas,
   FlightTelemetryData,
@@ -19,6 +18,9 @@ export default function App() {
   const [scrollProgress, setScrollProgress] = useState(0);
   const [scrollVelocity, setScrollVelocity] = useState(0);
   const [telemetry, setTelemetry] = useState<FlightTelemetryData | null>(null);
+
+  // Modal / Drawer state for Network Routes Manifest
+  const [isRouteManifestOpen, setIsRouteManifestOpen] = useState(false);
 
   // 3D Model state: Default is 11803 Commercial Airliner (D-3262)
   const [customModel, setCustomModel] = useState<THREE.Group | null>(null);
@@ -41,7 +43,10 @@ export default function App() {
     isPushbackReady: true,
   });
 
-  const lenisRef = useRef<Lenis | null>(null);
+  // Smooth virtual flight trajectory refs (ATMOS-style: page does NOT scroll down)
+  const targetProgressRef = useRef(0);
+  const currentProgressRef = useRef(0);
+  const velocityRef = useRef(0);
 
   const handleUploadModel = async (file: File) => {
     try {
@@ -58,12 +63,16 @@ export default function App() {
     setCustomModelName('11803 Commercial Airliner (D-3262)');
   };
 
-  // Sync page changes with browser hash and reset scroll
+  // Sync page changes with browser hash and reset progress
   const navigateToPage = (page: 'in-air' | 'in-hangar') => {
     setActivePage(page);
     window.location.hash = page === 'in-hangar' ? '#hangar' : '#air';
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    setScrollProgress(0);
+    if (page === 'in-air') {
+      targetProgressRef.current = 0;
+      currentProgressRef.current = 0;
+      setScrollProgress(0);
+      setScrollVelocity(0);
+    }
   };
 
   useEffect(() => {
@@ -72,77 +81,166 @@ export default function App() {
         setActivePage('in-hangar');
       } else {
         setActivePage('in-air');
+        targetProgressRef.current = 0;
+        currentProgressRef.current = 0;
+        setScrollProgress(0);
+        setScrollVelocity(0);
       }
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      setScrollProgress(0);
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
+  // Programmatic flight jump function for buttons & altitude scrubber
+  const jumpToProgress = (target: number) => {
+    targetProgressRef.current = Math.min(1, Math.max(0, target));
+  };
+
+  // =========================================================================
+  // ATMOS VIRTUAL FLIGHT SCROLL ENGINE (NO PAGE DOWN SCROLLING)
+  // Instead of the window scrolling vertically, wheel / touch / keys smoothly
+  // navigate the 3D aircraft and camera INTO the clouds and background!
+  // =========================================================================
   useEffect(() => {
-    // Lenis smooth inertial scrolling for the flight journey - ATMOS style
-    const lenis = new Lenis({
-      duration: 1.4,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      orientation: 'vertical',
-      smoothWheel: true,
-      wheelMultiplier: 1.05,
-      touchMultiplier: 2,
-      infinite: false,
-    });
-    lenisRef.current = lenis;
-
-    let lastScrollY = window.scrollY;
-    let rafId: number;
-
-    function raf(time: number) {
-      lenis.raf(time);
-      rafId = requestAnimationFrame(raf);
+    if (activePage !== 'in-air') {
+      document.body.style.overflow = 'auto';
+      return;
     }
-    rafId = requestAnimationFrame(raf);
 
-    lenis.on('scroll', (e: { scroll: number; velocity: number }) => {
-      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-      const progress = maxScroll > 0 ? Math.min(Math.max(e.scroll / maxScroll, 0), 1) : 0;
-      setScrollProgress(progress);
-      setScrollVelocity(e.velocity);
+    // Lock document scroll so page does not scroll down
+    document.body.style.overflow = 'hidden';
 
-      // ATMOS-style audio response to scroll velocity
-      flightAudio.updateSpeed(Math.min(Math.abs(e.velocity) * 0.15, 1));
-      lastScrollY = e.scroll;
-    });
-
-    const handleNativeScroll = () => {
-      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-      const progress = maxScroll > 0 ? Math.min(Math.max(window.scrollY / maxScroll, 0), 1) : 0;
-      setScrollProgress(progress);
-      const vel = window.scrollY - lastScrollY;
-      setScrollVelocity(vel * 0.1);
-      lastScrollY = window.scrollY;
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      // Normalize wheel delta across mice and trackpads
+      const delta = Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 120);
+      const scrollSpeed = 0.00075;
+      targetProgressRef.current = Math.min(
+        1,
+        Math.max(0, targetProgressRef.current + delta * scrollSpeed)
+      );
     };
-    window.addEventListener('scroll', handleNativeScroll, { passive: true });
+
+    let touchStartY = 0;
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        touchStartY = e.touches[0].clientY;
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 0) return;
+      e.preventDefault();
+      const currentY = e.touches[0].clientY;
+      const deltaY = touchStartY - currentY;
+      touchStartY = currentY;
+      const touchSpeed = 0.0022;
+      targetProgressRef.current = Math.min(
+        1,
+        Math.max(0, targetProgressRef.current + deltaY * touchSpeed)
+      );
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
+        e.preventDefault();
+        targetProgressRef.current = Math.min(1, targetProgressRef.current + 0.12);
+      } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+        e.preventDefault();
+        targetProgressRef.current = Math.max(0, targetProgressRef.current - 0.12);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        targetProgressRef.current = 0;
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        targetProgressRef.current = 1;
+      } else if (e.key === 'Escape') {
+        setIsRouteManifestOpen(false);
+      }
+    };
+
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('keydown', handleKeyDown);
+
+    let rafId: number;
+    let lastTime = performance.now();
+
+    const loop = (time: number) => {
+      const dt = Math.min((time - lastTime) / 1000, 0.1);
+      lastTime = time;
+
+      const prev = currentProgressRef.current;
+      const target = targetProgressRef.current;
+
+      // Silky smooth asymptotic lerp glide
+      const lerpSpeed = 5.2;
+      currentProgressRef.current += (target - currentProgressRef.current) * Math.min(1, dt * lerpSpeed);
+
+      // Realtime velocity calculation
+      const instantVel = (currentProgressRef.current - prev) / (dt || 0.016);
+      velocityRef.current = THREE.MathUtils.lerp(velocityRef.current, instantVel, 0.22);
+
+      setScrollProgress(currentProgressRef.current);
+      setScrollVelocity(velocityRef.current);
+
+      // ATMOS acoustic audio responsiveness
+      flightAudio.updateSpeed(Math.min(Math.abs(velocityRef.current) * 0.35, 1));
+
+      rafId = requestAnimationFrame(loop);
+    };
+
+    rafId = requestAnimationFrame(loop);
 
     return () => {
       cancelAnimationFrame(rafId);
-      lenis.destroy();
-      window.removeEventListener('scroll', handleNativeScroll);
+      window.removeEventListener('wheel', handleWheel);
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = 'auto';
     };
   }, [activePage]);
 
-  const scrollToSection = (id: string) => {
-    if (lenisRef.current) {
-      lenisRef.current.scrollTo(`#${id}`, { offset: 0, duration: 1.6 });
-    } else {
-      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
+  const isVioletZone = scrollProgress < 0.38;
 
-  const isVioletZone = scrollProgress < 0.35;
+  // Chapter Opacity and Visibility helpers for floating overlays
+  // Hero (0.0 to 0.22)
+  const heroOpacity = Math.max(0, 1 - scrollProgress * 4.6);
+  // Chapter I (0.22 to 0.48)
+  const ch1Opacity =
+    scrollProgress < 0.18
+      ? 0
+      : scrollProgress < 0.26
+      ? (scrollProgress - 0.18) / 0.08
+      : scrollProgress < 0.42
+      ? 1
+      : scrollProgress < 0.50
+      ? Math.max(0, 1 - (scrollProgress - 0.42) / 0.08)
+      : 0;
+  // Chapter II (0.48 to 0.74)
+  const ch2Opacity =
+    scrollProgress < 0.46
+      ? 0
+      : scrollProgress < 0.54
+      ? (scrollProgress - 0.46) / 0.08
+      : scrollProgress < 0.66
+      ? 1
+      : scrollProgress < 0.74
+      ? Math.max(0, 1 - (scrollProgress - 0.66) / 0.08)
+      : 0;
+  // Chapter III (0.72 to 1.0)
+  const ch3Opacity =
+    scrollProgress < 0.70
+      ? 0
+      : scrollProgress < 0.78
+      ? (scrollProgress - 0.70) / 0.08
+      : 1;
 
   return (
-    <main className="relative w-full bg-white selection:bg-black selection:text-white">
-      {/* 3D WebGL Scene: In-Air (Chasing Up) vs In-Hangar (3D Airstrip Ground Scene) */}
+    <main className="relative w-full min-h-screen bg-white selection:bg-black selection:text-white">
+      {/* 3D WebGL Flight Scene (In-Air Stratosphere vs In-Hangar Apron) */}
       <FlightCanvas
         scrollProgress={scrollProgress}
         scrollVelocity={scrollVelocity}
@@ -153,23 +251,23 @@ export default function App() {
         onTelemetryUpdate={setTelemetry}
       />
 
-      {/* Atmospheric Violet Stratosphere Background (In-Air Page) - ATMOS exact (luminous lighter violet) */}
+      {/* Atmospheric Luminous Violet Background (Stratosphere FL450) */}
       <div
-        className="fixed inset-0 pointer-events-none z-0 transition-opacity duration-1000 atmos-grain"
+        className="fixed inset-0 pointer-events-none z-0 transition-opacity duration-700 atmos-grain"
         style={{
           background: 'linear-gradient(180deg, #1b3fed 0%, #3a5df5 45%, #607ef8 78%, #859efa 100%)',
-          opacity: activePage === 'in-air' ? Math.max(0, 1 - scrollProgress * 2.5) : 0.02,
+          opacity: activePage === 'in-air' ? Math.max(0, 1 - scrollProgress * 2.3) : 0.02,
         }}
         aria-hidden="true"
       />
 
-      {/* White Cloud Void Fade Background - ATMOS exact (after 40% scroll) */}
+      {/* Brilliant White Cloud Void Background (Transitions after 40% scroll into clouds) */}
       <div
         className="fixed inset-0 pointer-events-none z-0 bg-white"
         style={{
           opacity:
             activePage === 'in-air'
-              ? Math.min(1, Math.max(0, (scrollProgress - 0.4) * 2.5))
+              ? Math.min(1, Math.max(0, (scrollProgress - 0.38) * 2.4))
               : 0.98,
         }}
         aria-hidden="true"
@@ -188,11 +286,11 @@ export default function App() {
           </div>
           <div className="absolute bottom-8 left-8 flex items-center gap-1.5 animate-reticle">
             <span className="text-white/60">+</span>
-            <span>ELEVATION: FL450</span>
+            <span>ELEVATION: {scrollProgress < 0.4 ? 'FL450' : scrollProgress < 0.7 ? 'FL250' : 'FL080'}</span>
           </div>
           <div className="absolute bottom-8 right-8 flex items-center gap-1.5 animate-reticle">
             <span className="text-white/60">+</span>
-            <span>SPEED: MACH 0.85</span>
+            <span>SPEED: MACH 0.94</span>
           </div>
         </div>
       )}
@@ -212,26 +310,26 @@ export default function App() {
           <div className="flex items-center gap-4">
             <div className="flex flex-col gap-5 text-[9px] font-mono text-white/50 uppercase tracking-wider text-right">
               <button
-                onClick={() => scrollToSection('hero')}
-                className={`transition-colors hover:text-white ${scrollProgress < 0.25 ? 'text-white font-bold' : ''}`}
+                onClick={() => jumpToProgress(0.0)}
+                className={`transition-colors hover:text-white ${scrollProgress < 0.24 ? 'text-white font-bold' : ''}`}
               >
                 FL450 · STRATOSPHERE
               </button>
               <button
-                onClick={() => scrollToSection('ascent')}
-                className={`transition-colors hover:text-white ${scrollProgress >= 0.25 && scrollProgress < 0.5 ? 'text-white font-bold' : ''}`}
+                onClick={() => jumpToProgress(0.35)}
+                className={`transition-colors hover:text-white ${scrollProgress >= 0.24 && scrollProgress < 0.50 ? 'text-white font-bold' : ''}`}
               >
                 FL250 · TROPOSPHERE
               </button>
               <button
-                onClick={() => scrollToSection('cloud-dive')}
-                className={`transition-colors hover:text-white ${scrollProgress >= 0.5 && scrollProgress < 0.75 ? 'text-white font-bold' : ''}`}
+                onClick={() => jumpToProgress(0.70)}
+                className={`transition-colors hover:text-white ${scrollProgress >= 0.50 && scrollProgress < 0.74 ? 'text-white font-bold' : ''}`}
               >
                 FL100 · APPROACH
               </button>
               <button
                 onClick={() => navigateToPage('in-hangar')}
-                className={`transition-colors hover:text-white ${scrollProgress >= 0.75 ? 'text-white font-bold' : ''}`}
+                className={`transition-colors hover:text-white ${scrollProgress >= 0.74 ? 'text-white font-bold' : ''}`}
               >
                 GND · APRON DOCK
               </button>
@@ -240,7 +338,7 @@ export default function App() {
             <div className="w-[1.5px] h-48 bg-white/20 relative rounded-full">
               {/* Active glowing indicator tick */}
               <div
-                className="absolute left-1/2 -translate-x-1/2 w-3.5 h-1 bg-white rounded-full transition-all duration-150 shadow-[0_0_10px_rgba(255,255,255,0.8)]"
+                className="absolute left-1/2 -translate-x-1/2 w-3.5 h-1 bg-white rounded-full transition-all duration-75 shadow-[0_0_10px_rgba(255,255,255,0.9)]"
                 style={{ top: `${Math.min(100, Math.max(0, scrollProgress * 100))}%` }}
               />
             </div>
@@ -249,27 +347,34 @@ export default function App() {
       )}
 
       {/* ========================================================================= */}
-      {/* PAGE 1: IN-AIR FLIGHT JOURNEY (CHASING-UP PERSPECTIVE · ATMOS.LEEROY.CA) */}
+      {/* PAGE 1: IN-AIR FLIGHT JOURNEY (ATMOS.LEEROY.CA FLIGHT ANIMATION)          */}
+      {/* The landing page does NOT scroll down. Instead, scrolling moves INTO the  */}
+      {/* clouds and background while editorial narrative chapters float over WebGL */}
       {/* ========================================================================= */}
       {activePage === 'in-air' && (
-        <div className="relative z-20 animate-fade-in">
-          {/* HERO SECTION — VIOLET HORIZON, EDITORIAL WORDMARK */}
-          <section
-            className="min-h-screen flex flex-col items-center justify-center px-6 text-center select-none"
-            id="hero"
+        <div className="fixed inset-0 h-screen w-screen overflow-hidden select-none z-20 pointer-events-none">
+          {/* LAYER 0: HERO (FL450 STRATOSPHERE HORIZON) */}
+          <div
+            className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center transition-all duration-300"
+            style={{
+              opacity: heroOpacity,
+              transform: `translateY(-${scrollProgress * 60}px) scale(${1 - scrollProgress * 0.1})`,
+              pointerEvents: heroOpacity > 0.05 ? 'auto' : 'none',
+              visibility: heroOpacity > 0.005 ? 'visible' : 'hidden',
+            }}
           >
             <div className="max-w-4xl mx-auto flex flex-col items-center">
-              <p className="font-serif text-[11px] sm:text-xs uppercase tracking-[0.4em] text-white/70 mb-4 animate-fade-in">
+              <p className="font-serif text-[11px] sm:text-xs uppercase tracking-[0.4em] text-white/70 mb-4">
                 MOVE WITH THE ATMOSPHERE
               </p>
 
               {/* Main Title - High-fashion ultra-wide tracked serif */}
-              <h1 className="font-serif text-white font-light text-[clamp(54px,9vw,110px)] tracking-[0.25em] uppercase leading-none mb-10 drop-shadow-lg animate-fade-in">
+              <h1 className="font-serif text-white font-light text-[clamp(54px,9vw,110px)] tracking-[0.25em] uppercase leading-none mb-10 drop-shadow-lg">
                 IMPERIUM
               </h1>
 
               {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row items-center gap-4 animate-fade-in">
+              <div className="flex flex-col sm:flex-row items-center gap-4">
                 <button
                   onClick={() => navigateToPage('in-hangar')}
                   className="inline-flex items-center gap-2.5 px-8 py-4 rounded-full bg-white text-black font-sans font-bold text-xs uppercase tracking-wider hover:scale-105 active:scale-95 transition-all shadow-[0_10px_30px_rgba(0,0,0,0.3)]"
@@ -280,14 +385,14 @@ export default function App() {
                 </button>
 
                 <button
-                  onClick={() => scrollToSection('ascent')}
+                  onClick={() => jumpToProgress(0.35)}
                   className="px-8 py-4 rounded-full border border-white/30 text-white font-sans font-medium text-xs uppercase tracking-wider hover:bg-white/10 active:scale-95 transition-all backdrop-blur-sm"
                 >
                   Flight Experience
                 </button>
 
                 <button
-                  onClick={() => scrollToSection('routes')}
+                  onClick={() => setIsRouteManifestOpen(true)}
                   className="px-7 py-4 rounded-full border border-white/20 text-white/80 font-sans font-medium text-xs uppercase tracking-wider hover:bg-white/10 hover:text-white active:scale-95 transition-all backdrop-blur-sm"
                 >
                   Network Routes
@@ -295,31 +400,38 @@ export default function App() {
               </div>
             </div>
 
-            {/* Bottom Scroll Indicator */}
+            {/* Bottom Scroll Indicator - Prompts scrolling into clouds */}
             <div
-              onClick={() => scrollToSection('ascent')}
-              className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 cursor-pointer text-white/50 hover:text-white transition-colors duration-300 select-none"
+              onClick={() => jumpToProgress(0.35)}
+              className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 cursor-pointer text-white/50 hover:text-white transition-colors duration-300 select-none pointer-events-auto"
             >
               <span className="font-serif text-[10px] uppercase tracking-[0.3em]">
-                SCROLL TO NAVIGATE FLIGHT
+                SCROLL TO DIVE INTO CLOUDS
               </span>
               <div className="w-7 h-12 border border-white/30 rounded-full relative overflow-hidden backdrop-blur-sm flex justify-center">
                 <div className="w-1.5 h-1.5 bg-white rounded-full mt-2 animate-scroll-pill shadow-[0_0_8px_white]" />
               </div>
             </div>
-          </section>
+          </div>
 
-
-          {/* SECTION 1: STRATOSPHERIC ASCENT (FL450) - ATMOS NARRATIVE CHAPTER */}
-          <section
-            className="min-h-screen flex items-center justify-center px-6 sm:px-12 py-32 sm:py-48"
-            id="ascent"
+          {/* LAYER 1: CHAPTER I · THE ASCENT (FL350 - FL250 TROPOSPHERE) */}
+          <div
+            className="absolute inset-0 flex items-center justify-center px-6 sm:px-12 pointer-events-none transition-all duration-300"
+            style={{
+              opacity: ch1Opacity,
+              transform: `translateY(${(0.35 - scrollProgress) * 40}px)`,
+              pointerEvents: ch1Opacity > 0.1 ? 'auto' : 'none',
+              visibility: ch1Opacity > 0.01 ? 'visible' : 'hidden',
+            }}
           >
             <div className="max-w-4xl mx-auto w-full">
-              <div className="p-8 sm:p-14 rounded-3xl backdrop-blur-md bg-white/10 border border-white/20 text-white transition-colors duration-500">
-                <p className="font-serif text-xs uppercase tracking-[0.25em] text-white/60 mb-6">
-                  Chapter I · The Ascent
-                </p>
+              <div className="p-8 sm:p-14 rounded-3xl backdrop-blur-xl bg-white/10 border border-white/20 text-white shadow-2xl">
+                <div className="flex items-center gap-2 mb-6">
+                  <Wind size={15} className="text-white/60" />
+                  <p className="font-serif text-xs uppercase tracking-[0.25em] text-white/60">
+                    Chapter I · The Ascent
+                  </p>
+                </div>
                 <h2 className="font-serif text-3xl sm:text-5xl lg:text-[54px] font-normal leading-[1.12] tracking-tight mb-8">
                   Above weather systems.
                   <br />
@@ -328,7 +440,7 @@ export default function App() {
                 <p className="font-sans text-lg sm:text-2xl text-white/80 font-normal leading-relaxed max-w-2xl mb-12">
                   At 45,000 feet, turbulence ceases. The air density thins to a whisper,
                   allowing our custom aerodynamic profile to glide along the jet stream
-                  with total calm and undisturbed grace. Scroll to ascend through the stratospheric layers.
+                  with undisturbed grace. Scroll forward to penetrate the cloud deck below.
                 </p>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-8 pt-8 border-t border-white/20 font-mono text-xs sm:text-sm">
@@ -351,209 +463,166 @@ export default function App() {
                     <span className="text-xl sm:text-2xl font-light text-white">&lt; 44 dBA</span>
                   </div>
                 </div>
+
+                <div className="mt-8 pt-4 flex items-center justify-between">
+                  <button
+                    onClick={() => jumpToProgress(0.60)}
+                    className="inline-flex items-center gap-2 text-xs font-mono tracking-widest text-white/70 hover:text-white uppercase"
+                  >
+                    <span>Penetrate Cloud Deck →</span>
+                  </button>
+                  <span className="font-mono text-[10px] text-white/40 uppercase">
+                    FLIGHT PROGRESS: 35%
+                  </span>
+                </div>
               </div>
             </div>
-          </section>
+          </div>
 
-          {/* SECTION 2: AERODYNAMIC PRECISION & THE CRAFT - ATMOS NARRATIVE CHAPTER */}
-          <section
-            className="min-h-screen flex items-center justify-center px-6 sm:px-12 py-32 sm:py-48"
-            id="craft"
+          {/* LAYER 2: CHAPTER II · AERODYNAMIC PRECISION (FL150 CLOUD CANYON) */}
+          <div
+            className="absolute inset-0 flex items-center justify-center px-6 sm:px-12 pointer-events-none transition-all duration-300"
+            style={{
+              opacity: ch2Opacity,
+              transform: `translateY(${(0.60 - scrollProgress) * 40}px)`,
+              pointerEvents: ch2Opacity > 0.1 ? 'auto' : 'none',
+              visibility: ch2Opacity > 0.01 ? 'visible' : 'hidden',
+            }}
           >
             <div className="max-w-4xl mx-auto w-full text-center">
-              <p className="font-serif text-[11px] uppercase tracking-[0.25em] text-black/40 mb-6">
-                Chapter II · The Engineering
-              </p>
-              <h2 className="font-serif text-3xl sm:text-5xl lg:text-[58px] font-normal tracking-tight text-black mb-10 leading-[1.12]">
+              <div className="inline-flex items-center gap-2 mb-4 px-3 py-1 rounded-full bg-black/5 border border-black/10">
+                <Compass size={13} className="text-black/50" />
+                <span className="font-serif text-[11px] uppercase tracking-[0.25em] text-black/50">
+                  Chapter II · The Engineering
+                </span>
+              </div>
+              <h2 className="font-serif text-3xl sm:text-5xl lg:text-[56px] font-normal tracking-tight text-black mb-6 leading-[1.12]">
                 Sculpted for the stratosphere.
               </h2>
-              <p className="font-sans text-lg sm:text-2xl text-black/70 font-normal leading-relaxed max-w-2xl mx-auto mb-16">
+              <p className="font-sans text-base sm:text-xl text-black/70 font-normal leading-relaxed max-w-2xl mx-auto mb-10">
                 Custom carbon-titanium composite fuselage, natural laminar flow swept wings,
-                and acoustic dampening turbines engineered to erase the friction of travel.
-                Continue scrolling to explore the crystal-clear engineering precision.
+                and acoustic dampening turbofans engineered to erase the friction of travel.
               </p>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
-                <div className="p-8 rounded-3xl border border-black/10 bg-white/80 backdrop-blur-sm hover:scale-105 transition-transform duration-300">
-                  <span className="font-mono text-xs text-black/40 font-semibold mb-3 block">01</span>
-                  <h3 className="font-serif text-2xl text-black mb-3">Laminar Winglets</h3>
-                  <p className="font-sans text-sm text-black/60 leading-relaxed">
-                    Bi-convex raked wingtips slicing through upper vortex wakes, cutting drag by 14% and eliminating high-altitude roll oscillation.
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-left">
+                <div className="p-6 sm:p-7 rounded-3xl border border-black/10 bg-white/85 backdrop-blur-md hover:scale-105 transition-transform duration-300 shadow-lg">
+                  <span className="font-mono text-xs text-blue-600 font-semibold mb-2 block">01</span>
+                  <h3 className="font-serif text-xl text-black mb-2">Laminar Winglets</h3>
+                  <p className="font-sans text-xs sm:text-sm text-black/60 leading-relaxed">
+                    Bi-convex raked wingtips slicing through upper vortex wakes, cutting drag by 14% and eliminating roll oscillation.
                   </p>
                 </div>
 
-                <div className="p-8 rounded-3xl border border-black/10 bg-white/80 backdrop-blur-sm hover:scale-105 transition-transform duration-300">
-                  <span className="font-mono text-xs text-black/40 font-semibold mb-3 block">02</span>
-                  <h3 className="font-serif text-2xl text-black mb-3">Acoustic Shield</h3>
-                  <p className="font-sans text-sm text-black/60 leading-relaxed">
+                <div className="p-6 sm:p-7 rounded-3xl border border-black/10 bg-white/85 backdrop-blur-md hover:scale-105 transition-transform duration-300 shadow-lg">
+                  <span className="font-mono text-xs text-violet-600 font-semibold mb-2 block">02</span>
+                  <h3 className="font-serif text-xl text-black mb-2">Acoustic Shield</h3>
+                  <p className="font-sans text-xs sm:text-sm text-black/60 leading-relaxed">
                     Rear pylon-mounted turbofan nacelles directing jet wash away from passenger quarters. Interior decibels rival a quiet library.
                   </p>
                 </div>
 
-                <div className="p-8 rounded-3xl border border-black/10 bg-white/80 backdrop-blur-sm hover:scale-105 transition-transform duration-300">
-                  <span className="font-mono text-xs text-black/40 font-semibold mb-3 block">03</span>
-                  <h3 className="font-serif text-2xl text-black mb-3">Circadian Aura</h3>
-                  <p className="font-sans text-sm text-black/60 leading-relaxed">
+                <div className="p-6 sm:p-7 rounded-3xl border border-black/10 bg-white/85 backdrop-blur-md hover:scale-105 transition-transform duration-300 shadow-lg">
+                  <span className="font-mono text-xs text-emerald-600 font-semibold mb-2 block">03</span>
+                  <h3 className="font-serif text-xl text-black mb-2">Circadian Aura</h3>
+                  <p className="font-sans text-xs sm:text-sm text-black/60 leading-relaxed">
                     Cabin pressurization at a relaxed 3,000 ft altitude equivalent with full-spectrum solar synchronization to eradicate fatigue.
                   </p>
                 </div>
               </div>
-            </div>
-          </section>
 
-          {/* SECTION 3: THE CLOUD DIVE - ATMOS NARRATIVE CHAPTER */}
-          <section
-            className="min-h-screen flex items-center justify-center px-6 sm:px-12 py-32 sm:py-48 text-center"
-            id="cloud-dive"
+              <div className="mt-8 flex justify-center">
+                <button
+                  onClick={() => jumpToProgress(0.85)}
+                  className="px-6 py-2.5 rounded-full border border-black/15 bg-black/5 hover:bg-black/10 text-black text-xs font-mono uppercase tracking-wider transition-colors"
+                >
+                  Approach Corridor →
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* LAYER 3: CHAPTER III · THE CLOUD DIVE & DESTINATION APPROACH (FL080 - GND) */}
+          <div
+            className="absolute inset-0 flex items-center justify-center px-6 sm:px-12 text-center pointer-events-none transition-all duration-300"
+            style={{
+              opacity: ch3Opacity,
+              transform: `translateY(${(0.90 - scrollProgress) * 30}px)`,
+              pointerEvents: ch3Opacity > 0.1 ? 'auto' : 'none',
+              visibility: ch3Opacity > 0.01 ? 'visible' : 'hidden',
+            }}
           >
-            <div className="max-w-3xl mx-auto">
-              <p className="font-serif text-[11px] uppercase tracking-[0.25em] text-black/40 mb-6">
-                Chapter III · The Descent
-              </p>
-              <h2 className="font-serif text-3xl sm:text-5xl lg:text-[60px] font-normal tracking-tight text-black mb-8 leading-[1.1]">
+            <div className="max-w-3xl mx-auto p-10 sm:p-14 rounded-3xl backdrop-blur-xl bg-white/90 border border-black/10 shadow-2xl">
+              <div className="inline-flex items-center gap-2 mb-4 px-3 py-1 rounded-full bg-black/5 border border-black/10">
+                <Layers size={13} className="text-black/50" />
+                <span className="font-serif text-[11px] uppercase tracking-[0.25em] text-black/50">
+                  Chapter III · The Descent & Arrival
+                </span>
+              </div>
+              <h2 className="font-serif text-3xl sm:text-5xl lg:text-[58px] font-normal tracking-tight text-black mb-6 leading-[1.1]">
                 Through the clouds.
                 <br />
                 Into absolute stillness.
               </h2>
-              <p className="font-sans text-lg sm:text-2xl text-black/60 font-normal leading-relaxed max-w-xl mx-auto mb-12">
-                Watch the aeroplane bank through the cumulus banks below.
-                Scroll forward to descend smoothly into the destination horizon, where the autonomous turnaround optimization awaits.
+              <p className="font-sans text-base sm:text-xl text-black/65 font-normal leading-relaxed max-w-xl mx-auto mb-10">
+                Gliding smoothly through the cumulus banks. Ahead lies the destination tarmac,
+                where our autonomous airport turnaround optimization and 3D ramp operations await.
               </p>
 
-              <button
-                onClick={() => navigateToPage('in-hangar')}
-                className="inline-flex items-center gap-2 px-8 py-3.5 rounded-full bg-black text-white font-sans text-sm sm:text-base font-bold tracking-wide hover:opacity-90 active:scale-95 transition-all shadow-md"
-              >
-                <Warehouse size={16} />
-                <span>Enter Autonomous Operations Hub</span>
-              </button>
-            </div>
-          </section>
-
-          {/* SECTION 4: ATMOSPHERIC CRYSTAL GROWTH - IGLOO.INC INSPIRED */}
-          <section
-            className="min-h-screen flex items-center justify-center px-6 sm:px-12 py-32 sm:py-48"
-            id="crystal-growth"
-          >
-            <div className="max-w-4xl mx-auto w-full">
-              <div className="text-center mb-12">
-                <p className="font-serif text-[11px] uppercase tracking-[0.25em] text-black/40 mb-6">
-                  Chapter IV · Procedural Beauty
-                </p>
-                <h2 className="font-serif text-3xl sm:text-5xl lg:text-[56px] font-normal tracking-tight text-black mb-8 leading-[1.12]">
-                  Crystalline precision.
-                  <br />
-                  Algorithmic elegance.
-                </h2>
-                <p className="font-sans text-lg sm:text-2xl text-black/60 font-normal leading-relaxed max-w-2xl mx-auto">
-                  Just as ice crystals form unique patterns under specific conditions,
-                  our turnaround optimization algorithm adapts to disruptions with procedural intelligence.
-                  Each decision creates a new crystalline solution path.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-16">
-                <div className="p-8 rounded-3xl border border-black/10 bg-gradient-to-br from-blue-50/50 to-white/80 backdrop-blur-sm">
-                  <div className="font-mono text-xs text-black/40 font-semibold mb-3">ALGORITHM V3.4</div>
-                  <h3 className="font-serif text-2xl text-black mb-3">Priority-Weighted Scheduling</h3>
-                  <p className="font-sans text-sm text-black/60 leading-relaxed">
-                    Emergency flights preempt standard operations through dynamic resource reallocation,
-                    similar to how stronger crystal growth paths dominate in natural formation.
-                  </p>
-                </div>
-
-                <div className="p-8 rounded-3xl border border-black/10 bg-gradient-to-br from-violet-50/50 to-white/80 backdrop-blur-sm">
-                  <div className="font-mono text-xs text-black/40 font-semibold mb-3">RIPPLE EFFECT</div>
-                  <h3 className="font-serif text-2xl text-black mb-3">Adaptive Rebalancing</h3>
-                  <p className="font-sans text-sm text-black/60 leading-relaxed">
-                    When gate collisions or crew shortages occur, the algorithm propagates solutions
-                    across the network, minimizing delay cascades like thermal equilibrium in crystals.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* SECTION 5: ROUTE NETWORK MANIFEST */}
-          <RouteManifest />
-
-          {/* SECTION 6: AUTONOMOUS TURNAROUND OPTIMIZATION - CONNECTED TO ALGORITHM */}
-          <section
-            className="min-h-screen flex items-center justify-center px-6 sm:px-12 py-32 sm:py-48 bg-gradient-to-b from-white to-blue-50/30"
-            id="optimization"
-          >
-            <div className="max-w-5xl mx-auto w-full">
-              <div className="text-center mb-12">
-                <p className="font-serif text-[11px] uppercase tracking-[0.25em] text-black/40 mb-6">
-                  Chapter V · Autonomous Intelligence
-                </p>
-                <h2 className="font-serif text-3xl sm:text-5xl lg:text-[58px] font-normal tracking-tight text-black mb-8 leading-[1.12]">
-                  Real-time turnaround optimization.
-                  <br />
-                  Procedural decision making.
-                </h2>
-                <p className="font-sans text-lg sm:text-2xl text-black/60 font-normal leading-relaxed max-w-2xl mx-auto mb-8">
-                  Our RCPSP (Resource-Constrained Project Scheduling Problem) algorithm coordinates
-                  passenger boarding, baggage handling, cabin sanitization, Jet-A1 refuelling, and tug pushbacks
-                  under gate and crew constraints with priority-weighted critical path analysis.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-                <div className="p-6 rounded-2xl border border-black/10 bg-white/80 backdrop-blur-sm text-center">
-                  <div className="font-mono text-3xl font-light text-blue-600 mb-2">&lt;2ms</div>
-                  <div className="font-sans text-xs text-black/60 uppercase tracking-wider">Algorithm Execution</div>
-                </div>
-                <div className="p-6 rounded-2xl border border-black/10 bg-white/80 backdrop-blur-sm text-center">
-                  <div className="font-mono text-3xl font-light text-violet-600 mb-2">5-Level</div>
-                  <div className="font-sans text-xs text-black/60 uppercase tracking-wider">Priority System</div>
-                </div>
-                <div className="p-6 rounded-2xl border border-black/10 bg-white/80 backdrop-blur-sm text-center">
-                  <div className="font-mono text-3xl font-light text-emerald-600 mb-2">Dynamic</div>
-                  <div className="font-sans text-xs text-black/60 uppercase tracking-wider">Rebalancing</div>
-                </div>
-                <div className="p-6 rounded-2xl border border-black/10 bg-white/80 backdrop-blur-sm text-center">
-                  <div className="font-mono text-3xl font-light text-amber-600 mb-2">Ripple</div>
-                  <div className="font-sans text-xs text-black/60 uppercase tracking-wider">Delay Prevention</div>
-                </div>
-              </div>
-
-              <div className="text-center">
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <button
                   onClick={() => navigateToPage('in-hangar')}
-                  className="inline-flex items-center gap-2 px-8 py-3.5 rounded-full bg-black text-white font-sans text-sm sm:text-base font-bold tracking-wide hover:opacity-90 active:scale-95 transition-all shadow-md"
+                  className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-black text-white font-sans text-sm font-bold tracking-wide hover:opacity-90 active:scale-95 transition-all shadow-xl"
                 >
                   <Warehouse size={16} />
-                  <span>Launch Live Simulation System</span>
+                  <span>Enter 3D Apron Operations Hub</span>
+                  <ArrowUpRight size={15} />
                 </button>
-              </div>
-            </div>
-          </section>
 
-          {/* SECTION 5: COLOPHON */}
-          <footer className="bg-white border-t border-black/10 py-24 sm:py-32 px-6 sm:px-12 text-center">
-            <div className="max-w-4xl mx-auto">
-              <h3 className="font-serif text-3xl sm:text-5xl lg:text-6xl font-normal tracking-[0.2em] uppercase text-black mb-6">
-                IMERIUM
-              </h3>
-              <p className="font-sans text-sm sm:text-base text-black/50 font-normal max-w-md mx-auto mb-10 leading-relaxed">
-                Move with the atmosphere. A meditative approach to modern aviation.
-              </p>
-
-              <div className="flex flex-wrap items-center justify-center gap-6 font-sans text-xs text-black/60 mb-12">
                 <button
-                  onClick={() => navigateToPage('in-hangar')}
-                  className="font-bold text-black underline underline-offset-4 hover:opacity-80"
+                  onClick={() => setIsRouteManifestOpen(true)}
+                  className="px-7 py-3.5 rounded-full border border-black/20 text-black font-sans text-xs font-semibold uppercase tracking-wider hover:bg-black/5 active:scale-95 transition-all"
                 >
-                  Go to 3D Airstrip Operations Page →
+                  View Route Manifest
+                </button>
+
+                <button
+                  onClick={() => jumpToProgress(0.0)}
+                  className="px-6 py-3.5 rounded-full border border-black/10 text-black/60 font-sans text-xs font-medium uppercase tracking-wider hover:text-black hover:bg-black/5 active:scale-95 transition-all"
+                >
+                  Replay Stratosphere Ascent
                 </button>
               </div>
-
-              <p className="font-serif text-[11px] uppercase tracking-widest text-black/30">
-                © {new Date().getFullYear()} IMERIUM AVIATION · ALL RIGHTS RESERVED
-              </p>
             </div>
-          </footer>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* SLIDE-OVER MODAL / DRAWER: ROUTE NETWORK MANIFEST                         */}
+      {/* ========================================================================= */}
+      {isRouteManifestOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-5xl h-full bg-white shadow-2xl overflow-y-auto p-6 sm:p-10">
+            {/* Top Close Bar */}
+            <div className="flex items-center justify-between pb-6 mb-6 border-b border-black/10">
+              <div>
+                <span className="font-mono text-xs uppercase tracking-widest text-black/40">
+                  IMPERIUM GLOBAL DISPATCH
+                </span>
+                <h3 className="font-serif text-2xl text-black">Network Flight Manifest</h3>
+              </div>
+              <button
+                onClick={() => setIsRouteManifestOpen(false)}
+                className="p-2.5 rounded-full hover:bg-black/5 text-black/60 hover:text-black transition-colors"
+                aria-label="Close manifest"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Route Manifest Component */}
+            <RouteManifest />
+          </div>
         </div>
       )}
 
@@ -621,7 +690,7 @@ export default function App() {
               <ArrowLeft size={16} /> Return to Stratospheric In-Air Flight Experience
             </button>
             <p className="font-serif text-[10px] uppercase tracking-widest text-black/30 mt-6">
-              IMERIUM AIRPORT OPERATIONS · AUTONOMOUS RAMP DISPATCH
+              IMPERIUM AIRPORT OPERATIONS · AUTONOMOUS RAMP DISPATCH
             </p>
           </footer>
         </div>

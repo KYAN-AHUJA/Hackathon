@@ -437,24 +437,38 @@ export function FlightCanvas({
     const contrailPoints = new THREE.Points(contrailGeom, contrailMat);
     airplaneRoot.add(contrailPoints);
 
-    // High quality cloud puffs for in-air flight - ATMOS style
+    // High quality organic multi-cluster cloud puffs for in-air flight - ATMOS style
     const cloudCanvas = document.createElement('canvas');
-    cloudCanvas.width = 128;
-    cloudCanvas.height = 128;
+    cloudCanvas.width = 256;
+    cloudCanvas.height = 256;
     const cloudCtx = cloudCanvas.getContext('2d')!;
-    const cloudGrad = cloudCtx.createRadialGradient(64, 64, 2, 64, 64, 64);
-    cloudGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
-    cloudGrad.addColorStop(0.35, 'rgba(248, 250, 255, 0.65)');
-    cloudGrad.addColorStop(0.7, 'rgba(235, 242, 255, 0.25)');
-    cloudGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    cloudCtx.fillStyle = cloudGrad;
-    cloudCtx.fillRect(0, 0, 128, 128);
+
+    // Draw overlapping soft cloud lobes for natural cumulus shape
+    const drawLobe = (cx: number, cy: number, r: number, alpha: number) => {
+      const grad = cloudCtx.createRadialGradient(cx, cy, 2, cx, cy, r);
+      grad.addColorStop(0, `rgba(255, 255, 255, ${alpha})`);
+      grad.addColorStop(0.4, `rgba(248, 250, 255, ${alpha * 0.7})`);
+      grad.addColorStop(0.75, `rgba(235, 242, 255, ${alpha * 0.25})`);
+      grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      cloudCtx.fillStyle = grad;
+      cloudCtx.beginPath();
+      cloudCtx.arc(cx, cy, r, 0, Math.PI * 2);
+      cloudCtx.fill();
+    };
+
+    drawLobe(128, 128, 100, 0.95);
+    drawLobe(90, 138, 76, 0.85);
+    drawLobe(166, 138, 80, 0.85);
+    drawLobe(128, 92, 78, 0.8);
+    drawLobe(105, 105, 65, 0.75);
+    drawLobe(150, 105, 68, 0.75);
+
     const cloudTex = new THREE.CanvasTexture(cloudCanvas);
 
     const cloudPuffMat = new THREE.SpriteMaterial({
       map: cloudTex,
       transparent: true,
-      opacity: 0.68,
+      opacity: 0.72,
       blending: THREE.NormalBlending,
       depthWrite: false,
     });
@@ -462,20 +476,19 @@ export function FlightCanvas({
     const cloudsGroup = new THREE.Group();
     scene.add(cloudsGroup);
 
-    // Dense volumetric carpet of clouds situated directly beneath the airplane
-    const cloudCount = 130;
-    const cloudNodes: { sprite: THREE.Sprite; initialX: number; speed: number; rotSpeed: number }[] = [];
+    // ATMOS Multi-Layered Volumetric Cloud System:
+    // 1. Corridor Fly-Through Clouds (in front of camera and plane)
+    // 2. Dense Cumulus Carpet (beneath aircraft)
+    // 3. Flanking Horizon Banks (left and right depth)
+    const cloudNodes: { sprite: THREE.Sprite; initialX: number; initialY: number; speed: number; rotSpeed: number }[] = [];
 
-    for (let i = 0; i < cloudCount; i++) {
+    // Group 1: Corridor Fly-Through Clouds (75 sprites directly in the flight path)
+    for (let i = 0; i < 75; i++) {
       const sprite = new THREE.Sprite(cloudPuffMat.clone());
-      // Spanning horizon across X
-      const x = (Math.random() - 0.5) * 80;
-      // Positioned strictly beneath the aircraft (airplane altitude is at y ~ 0.2 to 1.2)
-      const y = -1.8 - Math.random() * 4.2;
-      // Spanning deep along Z
-      const z = 30 - Math.random() * 110;
-      // Fluffy large scales for continuous cumulus sea
-      const scale = 14 + Math.random() * 22;
+      const x = (Math.random() - 0.5) * 32;
+      const y = -1.6 + Math.random() * 4.2;
+      const z = 25 - Math.random() * 195;
+      const scale = 12 + Math.random() * 20;
 
       sprite.position.set(x, y, z);
       sprite.scale.set(scale, scale, 1);
@@ -484,8 +497,52 @@ export function FlightCanvas({
       cloudNodes.push({
         sprite,
         initialX: x,
+        initialY: y,
+        speed: 0.05 + Math.random() * 0.08,
+        rotSpeed: (Math.random() - 0.5) * 0.0014,
+      });
+    }
+
+    // Group 2: Volumetric Under-Wing Cumulus Carpet (125 sprites)
+    for (let i = 0; i < 125; i++) {
+      const sprite = new THREE.Sprite(cloudPuffMat.clone());
+      const x = (Math.random() - 0.5) * 110;
+      const y = -2.8 - Math.random() * 6.5;
+      const z = 40 - Math.random() * 230;
+      const scale = 22 + Math.random() * 34;
+
+      sprite.position.set(x, y, z);
+      sprite.scale.set(scale, scale, 1);
+      cloudsGroup.add(sprite);
+
+      cloudNodes.push({
+        sprite,
+        initialX: x,
+        initialY: y,
+        speed: 0.035 + Math.random() * 0.05,
+        rotSpeed: (Math.random() - 0.5) * 0.0008,
+      });
+    }
+
+    // Group 3: Flanking Horizon Banks (50 sprites)
+    for (let i = 0; i < 50; i++) {
+      const sprite = new THREE.Sprite(cloudPuffMat.clone());
+      const side = Math.random() > 0.5 ? 1 : -1;
+      const x = side * (26 + Math.random() * 48);
+      const y = -2.0 + Math.random() * 6.0;
+      const z = 30 - Math.random() * 210;
+      const scale = 25 + Math.random() * 32;
+
+      sprite.position.set(x, y, z);
+      sprite.scale.set(scale, scale, 1);
+      cloudsGroup.add(sprite);
+
+      cloudNodes.push({
+        sprite,
+        initialX: x,
+        initialY: y,
         speed: 0.04 + Math.random() * 0.06,
-        rotSpeed: (Math.random() - 0.5) * 0.0012,
+        rotSpeed: (Math.random() - 0.5) * 0.001,
       });
     }
 
@@ -611,93 +668,105 @@ export function FlightCanvas({
           baseOffsetZ = -6.8;
         }
 
-        if (p < 0.25) {
-          // Phase 0: Hero Stratosphere (0% - 25%) - 3/4 front-hero angle looking up
-          const lp = p / 0.25;
-          targetPlaneX = 0;
-          targetPlaneY = 0.2 + lp * 0.4 + turbY;
-          targetPlaneZ = -lp * 2.5;
+        // Total flight corridor depth traversed by scrolling
+        const flightDepth = 150.0;
+        const totalFlightZ = -p * flightDepth;
 
-          // Level cruise with subtle movements
-          targetRotX = -0.06 + turbPitch;
+        if (p < 0.24) {
+          // Phase 0: Hero Stratosphere (0% - 24%) - 3/4 front-hero angle looking up at airliner
+          const lp = p / 0.24;
+          targetPlaneX = 0;
+          targetPlaneY = 0.35 + lp * 0.4 + turbY;
+          targetPlaneZ = totalFlightZ;
+
+          targetRotX = -0.05 + turbPitch;
           targetRotY = 0;
           targetRotZ = turbRoll;
 
-          // Hero camera front view looking up
+          // Hero camera front view looking up at nose, windshield, wings
           targetCamX = targetPlaneX + 1.5;
-          targetCamY = targetPlaneY + 0.5;
-          targetCamZ = targetPlaneZ - 6.0;
+          targetCamY = targetPlaneY + 0.55;
+          targetCamZ = targetPlaneZ - 7.2;
           targetLookAt.set(targetPlaneX, targetPlaneY + 0.2, targetPlaneZ);
-        } else if (p < 0.50) {
-          // Phase 1: Stratospheric Cruise (25% - 50%) - Camera tracks alongside starboard wing
-          const lp = (p - 0.25) / (0.50 - 0.25);
+        } else if (p < 0.48) {
+          // Phase 1: Stratospheric Ascent & Wing Glide (24% - 48%)
+          // Camera glides into the sky, swinging alongside starboard wing
+          const lp = (p - 0.24) / 0.24;
           const arc = Math.sin(lp * Math.PI);
-          targetPlaneX = -2.0 * arc;
-          targetPlaneY = 0.6 + lp * 0.6 + turbY;
-          targetPlaneZ = -2.5 - lp * 5.0;
+          targetPlaneX = -2.2 * arc;
+          targetPlaneY = 0.75 + lp * 0.6 + turbY;
+          targetPlaneZ = totalFlightZ;
 
-          // Gentle bank alongside wing
-          targetRotX = -0.05 + 0.03 * arc;
-          targetRotY = -0.15 * arc;
-          targetRotZ = -0.28 * arc + turbRoll;
+          // Gentle aerodynamic banking
+          targetRotX = -0.04 + 0.02 * arc;
+          targetRotY = -0.12 * arc;
+          targetRotZ = -0.26 * arc + turbRoll;
 
-          // Camera alongside starboard wing
-          targetCamX = targetPlaneX + 3.5;
-          targetCamY = targetPlaneY + 0.8;
-          targetCamZ = targetPlaneZ - 4.0;
-          targetLookAt.set(targetPlaneX + 1.5, targetPlaneY + 0.1, targetPlaneZ);
-        } else if (p < 0.75) {
-          // Phase 2: Troposphere Cloud Penetration (50% - 75%) - Top-down chase angle
-          const lp = (p - 0.50) / (0.75 - 0.50);
-          targetPlaneX = Math.sin(lp * Math.PI) * 0.5;
-          targetPlaneY = 1.2 - lp * 0.8 + turbY;
-          targetPlaneZ = -7.5 - lp * 6.0;
+          // Camera tracks alongside starboard wing slicing through upper clouds
+          targetCamX = targetPlaneX + 3.8;
+          targetCamY = targetPlaneY + 1.1;
+          targetCamZ = targetPlaneZ - 4.5 + lp * 2.2;
+          targetLookAt.set(targetPlaneX + 0.6, targetPlaneY + 0.2, targetPlaneZ);
+        } else if (p < 0.74) {
+          // Phase 2: The Cloud Dive (48% - 74%) - Penetrating dense cumulus clouds
+          const lp = (p - 0.48) / 0.26;
+          const arc = Math.sin(lp * Math.PI);
+          targetPlaneX = arc * 2.0;
+          targetPlaneY = 1.35 - lp * 1.8 + turbY; // Dives down into the clouds
+          targetPlaneZ = totalFlightZ;
 
-          // Dramatic top-down approach
-          targetRotX = 0.15 * lp;
-          targetRotY = 0.1 * Math.sin(lp * Math.PI);
-          targetRotZ = -0.05 * Math.sin(lp * Math.PI) + turbRoll;
+          // Dramatic banking into the cloud deck
+          targetRotX = 0.12 * lp;
+          targetRotY = 0.15 * arc;
+          targetRotZ = -0.38 * arc + turbRoll;
 
-          // Top-down chase camera
-          targetCamX = targetPlaneX + 0.5;
-          targetCamY = targetPlaneY + 4.0;
-          targetCamZ = targetPlaneZ - 3.0;
+          // Camera descends alongside the plane right through the cloud layers
+          targetCamX = targetPlaneX + 2.2;
+          targetCamY = targetPlaneY + 2.0;
+          targetCamZ = targetPlaneZ - 3.2;
           targetLookAt.set(targetPlaneX, targetPlaneY, targetPlaneZ);
         } else {
-          // Phase 3: Descent & Runway Approach (75% - 100%) - Bank and align with ground
-          const lp = (p - 0.75) / 0.25;
-          targetPlaneX = Math.sin(lp * Math.PI * 0.5) * 0.3;
-          targetPlaneY = 0.4 - lp * 1.5 + turbY;
-          targetPlaneZ = -13.5 - lp * 8.0;
+          // Phase 3: Approach & Emerging on Destination Horizon (74% - 100%)
+          const lp = (p - 0.74) / 0.26;
+          targetPlaneX = Math.sin(lp * Math.PI * 0.5) * 0.4;
+          targetPlaneY = -0.45 - lp * 0.6 + turbY;
+          targetPlaneZ = totalFlightZ;
 
-          // Bank and align with ground approach
-          targetRotX = 0.1 * (1 - lp);
-          targetRotY = 0.05 * (1 - lp);
-          targetRotZ = -0.02 * (1 - lp) + turbRoll;
+          // Level off gracefully above cloud deck
+          targetRotX = 0.06 * (1 - lp);
+          targetRotY = 0.04 * (1 - lp);
+          targetRotZ = -0.04 * (1 - lp) + turbRoll;
 
-          // Ground approach alignment
-          targetCamX = targetPlaneX + 2.0;
-          targetCamY = targetPlaneY + 1.5;
-          targetCamZ = targetPlaneZ - 5.0;
-          targetLookAt.set(targetPlaneX, targetPlaneY + 0.1, targetPlaneZ);
+          // Trailing approach view over sunlit cloud sea
+          targetCamX = targetPlaneX + 1.5;
+          targetCamY = targetPlaneY + 1.7;
+          targetCamZ = targetPlaneZ + 5.5 - (1 - lp) * 7.5;
+          targetLookAt.set(targetPlaneX, targetPlaneY + 0.1, targetPlaneZ - 3.5);
         }
 
         // Contrail streaming aft towards the chase camera
         const posArr = contrailGeom.attributes.position.array as Float32Array;
         for (let i = 0; i < contrailCount; i++) {
-          posArr[i * 3 + 2] += 0.09 * (1 + Math.abs(v) * 2.2);
-          if (posArr[i * 3 + 2] > 22) {
+          posArr[i * 3 + 2] += 0.12 * (1 + Math.abs(v) * 2.5);
+          if (posArr[i * 3 + 2] > 28) {
             posArr[i * 3 + 2] = 1.4;
           }
         }
         contrailGeom.attributes.position.needsUpdate = true;
 
-        // Clouds drift
+        // Clouds scroll & drift:
+        // Clouds move dynamically as you scroll into them + continuous idle drift
+        const scrollDrive = Math.abs(v) * 1.2;
         cloudNodes.forEach((c) => {
-          c.sprite.position.z += c.speed * 2.4;
+          c.sprite.position.z += c.speed * 2.0 + scrollDrive;
           c.sprite.material.rotation += c.rotSpeed;
-          if (c.sprite.position.z > camera.position.z + 15) {
-            c.sprite.position.z = camera.position.z - 85;
+
+          // Wrap clouds ahead when they pass behind the camera
+          if (c.sprite.position.z > camera.position.z + 25) {
+            c.sprite.position.z = camera.position.z - (160 + Math.random() * 55);
+            c.sprite.position.x = c.initialX + (Math.random() - 0.5) * 8;
+          } else if (c.sprite.position.z < camera.position.z - 225) {
+            c.sprite.position.z = camera.position.z + (10 + Math.random() * 15);
           }
         });
 
@@ -817,6 +886,17 @@ export function FlightCanvas({
 
       curCamPos.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), lerpSpeed);
       camera.position.copy(curCamPos);
+
+      // Keep atmospheric sky sphere encasing camera as it travels through space
+      skySphere.position.copy(camera.position);
+      skySphereMat.uniforms.scrollProgress.value = p;
+
+      // Dynamic FOV speed-warp effect when scrolling quickly into clouds
+      if (mode === 'in-air') {
+        const targetFov = 38 + Math.min(Math.abs(v) * 2.5, 4.5);
+        camera.fov += (targetFov - camera.fov) * 0.1;
+        camera.updateProjectionMatrix();
+      }
 
       curCamLookAt.lerp(targetLookAt, lerpSpeed);
       camera.lookAt(curCamLookAt);
